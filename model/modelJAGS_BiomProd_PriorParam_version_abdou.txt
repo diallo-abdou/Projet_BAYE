@@ -1,0 +1,168 @@
+# ---------------------------------------------------------------
+# JAGS code for Dynamic Biomass Production Model
+# State-space model
+
+# Prior for parameters only
+
+# E. Rivot
+# November 2023
+
+# ---------------------------------------------------------------
+
+model_JAGS <- "
+
+
+# Data block
+# ---------------------------------------------------------------
+
+# No data transformation in this example
+# data{}
+
+# Model 
+# ---------------------------------------------------------------
+
+model
+{
+
+# Prior 
+# ---------------------------------------------------------------
+# ---------------------------------------------------------------
+
+#r ~ dunif(0.01,3)
+#r_p ~ dunif(0.01,3)
+
+#K ~ dunif(100,15000) 
+#K_p ~ dunif(100,15000) 
+
+# Gamma Informative priors on (r,K)
+# info issu des metanalyses
+Er <- 0.45 ; CVr <- 0.3
+ar <- 1/(CVr*CVr) ; br <- (1/(CVr*CVr))*(1/Er)
+r ~ dgamma(ar,br) 
+r_p ~ dgamma(ar,br) 
+
+EK <- 5000 ; CVK <- 0.6 # K est plus difficile a trouve
+aK <- 1/(CVK*CVK) ; bK <- (1/(CVK*CVK))*(1/EK)
+K ~ dgamma(aK,bK) 
+K_p ~ dgamma(aK,bK) 
+
+#-----------------------------------------------------------------
+
+# Cest mieux de defnir B initial proche de k
+# la dynamique est deterministe pour le moment
+
+
+## taux exploitation
+# C juste pour enrregistree et lavoir dans les graphiques
+# on propose de varier h suivant une loi betta
+
+for (t in 1:(n_obs-1))
+{
+h[t] ~ dbeta(1,1) # equivalent unif(1,1)
+C[t]<-h[t]*B[t]
+}
+
+
+## AJOUT DE LA PROJECTION
+for (t in n_obs: (n_obs +n_proj-1))
+{
+C[t]<-h[t]*B[t]
+h[t]<-0
+}
+
+
+# fin exploitation
+
+
+
+## Dynamique du processuce
+# sigma_p ne doit pas être fixe mais tiree dans une loi a priori
+
+sigma_p ~ dunif(0,1) # echelle log : erreur de process 
+tau_p <- 1/(sigma_p*sigma_p)# precision
+
+#initialisation
+alpha <- 1
+Bm[1] <- alpha*K
+B[1] ~ dlnorm(log(Bm[1]), tau_p)# biomasse de depart au debut des annee
+
+#boucle :
+for (t in 1:(n_obs -1 + n_proj)) 	#ajout de projection 
+{
+Bm[t+1] <- max(B[t] + r*B[t]*(1-(B[t]/K)) - h[t]*B[t], 0.001*K)
+B[t+1] ~ dlnorm(log(Bm[t+1]), tau_p)
+}
+# fin dynamique
+
+
+
+## Equation d'observation
+# On veut C_obs de 20%  (fiable a 20% près)
+
+CV_o <- 0.2
+sigma2_o<-log(CV_o*CV_o +1)
+tau_o <-1/sigma2_o
+
+for (t in 1:(n_obs-1))
+{
+C_obs[t] ~ dlnorm(log(C[t]), tau_o)
+}
+
+
+## Equation de l'indice d'abondance
+
+q~dunif(0,1)		# on veut que soit strictement positif
+for (t in 1:n_obs)	# on a des indice tous les ans 
+{
+I[t]<-q*B[t]
+I_obs[t] ~ dlnorm(log(I[t]), tau_o) 	#on peu considerer le meme erreur de tau_o que les observation ou + grand 
+}
+
+# ----------------------------------------------------------------
+
+# Maximum surplus production
+
+# Schaefer
+C_MSY <-  r*K/4
+C_MSY_p <-   r_p*K_p/4
+# Fox
+# C_MSY <-  r*K/(exp(1)*log(K))
+# C_MSY_p <-   r_p*K_p/(exp(1)*log(K_p))
+
+# Biomass at maximum surplus production
+
+# Schaefer
+B_MSY <- K/2
+B_MSY_p <- K_p/2
+# Fox
+# B_MSY <- K / exp(1)
+# B_MSY_p <- K_p / exp(1)
+
+# Fishing mortality at MSY
+# Schaefer : F_MSY = r/2
+# Fox : F_MSY <- r/log(K)
+h_MSY <- C_MSY / B_MSY
+h_MSY_p <- C_MSY_p / B_MSY_p
+
+# Depletion
+# for (t in 1:(n_obs-1)){  D[t] <- B[t]/B[1]  } 
+
+# Risk
+# Measured as the probability that the biomass level (last year)
+# is under a threshold defined a priori
+# threshold <- B_MSY
+# for (t in 1:(n_obs+n_proj)) {  risk[t] <- step(threshold-B[t])  }
+
+# Equilibrium curve
+# Depends on the parmaeters only 
+
+for (e in 1:n_equi)
+{
+# Schaefer
+C_e[e] <- r*B_e[e]*(1-B_e[e]/K)
+# Fox model
+# C_e[e] <- r*B_e[e]*(1-log(B_e[e])/log(K))
+}
+
+# end model
+}"
