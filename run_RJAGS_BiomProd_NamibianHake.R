@@ -33,6 +33,8 @@ library(MASS)
 # Load the model, written in a .txt file
 model <- "model/modelJAGS_BiomProd_PriorParam.txt"
 
+#model <- "model/modelJAGS_BiomProd_PriorParam.txt"
+
 #model <- "model/modelJAGS_BiomProd_PriorParam_version_abdou.txt"
 
 # Write the model specification into a virtual text file with name "model", to be found by JAGS
